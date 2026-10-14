@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>สแกนเข้างาน</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script src="js/api-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Sarabun', sans-serif; min-height: 100vh;
+      background: linear-gradient(160deg, #0f0f23 0%, #0d1b2a 60%, #0a0f1e 100%);
+      color: #e2e8f0;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 24px 16px 60px;
+      position: relative; overflow-x: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; width: 500px; height: 500px;
+      background: #10b981; border-radius: 50%; filter: blur(120px); opacity: 0.08;
+      bottom: -150px; right: -150px; pointer-events: none; z-index: 0;
+    }
+    .page-wrap {
+      width: 100%; max-width: 480px;
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column; align-items: center;
+      animation: fadeIn 0.5s ease;
+    }
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; margin-bottom: 10px;
+    }
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #64748b; text-decoration: none; font-size: 0.85em;
+      padding: 6px 12px; border-radius: 20px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      transition: all 0.25s;
+    }
+    .back-btn:hover { color: #e2e8f0; background: rgba(255,255,255,0.1); }
+    .top-logo { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; filter: drop-shadow(0 0 8px rgba(99,102,241,0.5)); }
+    .spacer { width: 60px; }
+    h2 { font-size: 1.05em; font-weight: 600; color: #c7d2fe; text-align: center; margin-bottom: 14px; }
+
+    .status-area { width: 100%; text-align: center; margin-bottom: 12px; }
+    #main-status { font-size: 0.88em; color: #94a3b8; min-height: 22px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    #gps-status  { font-size: 0.78em; color: #475569; margin-top: 5px; }
+    .gps-alert {
+      display: none; background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.35); color: #fca5a5;
+      border-radius: 12px; padding: 12px 16px; width: 100%;
+      margin-bottom: 12px; font-size: 0.86em; font-weight: 600; text-align: center;
+    }
+
+    /* ===== ช่องเลือกสถานะ — วางนอก modal เพื่อให้แสดงผลเสมอ ===== */
+    .status-box {
+      width: 100%; margin-bottom: 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px; padding: 14px 16px;
+    }
+    .status-box label {
+      display: block; font-size: 0.82em; font-weight: 700;
+      color: #94a3b8; margin-bottom: 10px; letter-spacing: 0.04em;
+    }
+    .status-btns { display: flex; gap: 10px; }
+    .s-btn {
+      flex: 1; padding: 13px 6px; border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.12);
+      font-family: 'Sarabun', sans-serif; font-size: 15px; font-weight: 700;
+      cursor: pointer; text-align: center; transition: all 0.2s;
+      background: rgba(255,255,255,0.05); color: #475569;
+    }
+    .s-btn.on-in  { background: rgba(16,185,129,0.2); border-color: #10b981; color: #34d399; box-shadow: 0 0 14px rgba(16,185,129,0.25); }
+    .s-btn.on-out { background: rgba(239,68,68,0.18); border-color: #ef4444; color: #fca5a5; box-shadow: 0 0 14px rgba(239,68,68,0.25); }
+    .s-btn:hover:not(.on-in):not(.on-out) { background: rgba(255,255,255,0.1); color: #94a3b8; }
+
+    /* VIDEO */
+    .video-container {
+      position: relative; width: 100%; border-radius: 20px; overflow: hidden;
+      background: #060612; min-height: 260px;
+    }
+    video {
+      width: 100%; height: auto; display: block;
+      transform: scaleX(-1); opacity: 0;
+      transition: opacity 0.5s; border-radius: 20px;
+    }
+    video.active { opacity: 1; }
+    .scanner-frame { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+    .corner { position: absolute; width: 28px; height: 28px; border-color: #10b981; border-style: solid; opacity: 0.8; }
+    .corner-tl { top:14px;    left:14px;   border-width:3px 0 0 3px; border-radius:4px 0 0 0; }
+    .corner-tr { top:14px;    right:14px;  border-width:3px 3px 0 0; border-radius:0 4px 0 0; }
+    .corner-bl { bottom:14px; left:14px;   border-width:0 0 3px 3px; border-radius:0 0 0 4px; }
+    .corner-br { bottom:14px; right:14px;  border-width:0 3px 3px 0; border-radius:0 0 4px 0; }
+    .scan-line {
+      display: none; position: absolute; left:8%; right:8%; height:2px;
+      background: linear-gradient(90deg, transparent, #10b981, transparent);
+      box-shadow: 0 0 8px rgba(16,185,129,0.8); z-index: 6;
+      animation: scanMove 2s ease-in-out infinite;
+    }
+    .scan-line.active { display: block; }
+    #overlay-status {
+      position: absolute; top:16px; left:50%; transform:translateX(-50%);
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(8px); color: #e2e8f0;
+      padding: 6px 18px; border-radius: 30px; z-index: 10;
+      white-space: nowrap; font-size: 0.82em; border: 1px solid rgba(255,255,255,0.1);
+    }
+    #btnStart {
+      display: none;
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: white; border: none; border-radius: 50px;
+      padding: 16px 44px; font-size: 18px; font-weight: 600;
+      cursor: pointer; font-family: 'Sarabun', sans-serif;
+      box-shadow: 0 4px 25px rgba(99,102,241,0.45);
+      margin: 18px auto 0; transition: all 0.3s;
+      animation: btnPulse 2s ease-in-out infinite;
+    }
+    #btnStart:hover { transform: translateY(-3px); animation: none; }
+
+    /* MODAL */
+    .modal-overlay {
+      display: none; position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.78); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-content {
+      background: linear-gradient(160deg, #1e1e3f 0%, #16213e 100%);
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 28px 22px 22px; border-radius: 24px;
+      width: 88%; max-width: 340px; text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      display: flex; flex-direction: column; align-items: center;
+      animation: modalSlideUp 0.3s ease;
+    }
+    .modal-avatar {
+      font-size: 46px; background: rgba(99,102,241,0.15);
+      border: 2px solid rgba(99,102,241,0.3); border-radius: 50%;
+      width: 74px; height: 74px; display: flex; align-items: center; justify-content: center;
+      margin-bottom: 12px;
+    }
+    .modal-label { font-size: 0.8em; color: #64748b; margin-bottom: 2px; }
+    .user-name   { font-size: 21px; color: #a5b4fc; font-weight: 700; margin-bottom: 6px; }
+    .pos-badge {
+      background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3);
+      color: #c7d2fe; font-size: 12px; font-weight: 600;
+      padding: 3px 12px; border-radius: 20px; margin-bottom: 10px;
+    }
+    .time-badge {
+      background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3);
+      color: #34d399; padding: 7px 18px; border-radius: 30px;
+      font-size: 14px; font-weight: 600; margin-bottom: 4px;
+    }
+    .score-text { color: #475569; font-size: 12px; margin-bottom: 10px; }
+
+    /* สรุปสถานะที่เลือกไว้ — แสดงใน modal */
+    .selected-status-display {
+      width: 100%; padding: 10px 14px; border-radius: 12px;
+      font-size: 15px; font-weight: 700; text-align: center;
+      margin-bottom: 16px;
+    }
+    .selected-status-display.is-in  { background: rgba(16,185,129,0.18); color: #34d399; border: 1.5px solid #10b981; }
+    .selected-status-display.is-out { background: rgba(239,68,68,0.16);  color: #fca5a5; border: 1.5px solid #ef4444; }
+
+    .btn-confirm {
+      width: 100%; padding: 15px; border: none; border-radius: 14px;
+      font-family: 'Sarabun', sans-serif; font-size: 17px; font-weight: 700;
+      cursor: pointer; color: white; margin-bottom: 8px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      box-shadow: 0 4px 18px rgba(16,185,129,0.35); transition: all 0.25s;
+    }
+    .btn-confirm:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn-confirm:disabled { background: rgba(255,255,255,0.08); color: #475569; box-shadow: none; cursor: not-allowed; }
+    .btn-cancel {
+      width: 100%; padding: 11px; border-radius: 14px;
+      border: 1px solid rgba(239,68,68,0.3);
+      background: rgba(239,68,68,0.1); color: #fca5a5;
+      font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: all 0.25s;
+    }
+    .btn-cancel:hover { background: rgba(239,68,68,0.2); }
+
+    .spinner {
+      display: inline-block; width: 15px; height: 15px;
+      border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+
+    .on-work{
+        background:#FFC107;
+        color:#000;
+        border:2px solid #FFC107;
+    }
+
+    .selected-status-display.is-work{
+        background:#FFF8DC;
+        color:#8A6D00;
+        border:2px solid #FFC107;
+    }
+
+    @keyframes fadeIn       { from{opacity:0;transform:translateY(10px);}  to{opacity:1;transform:translateY(0);} }
+    @keyframes btnPulse     { 0%,100%{box-shadow:0 4px 25px rgba(99,102,241,0.45);} 50%{box-shadow:0 4px 40px rgba(99,102,241,0.7);} }
+    @keyframes scanMove     { 0%{top:12%;} 50%{top:82%;} 100%{top:12%;} }
+    @keyframes modalSlideUp { from{opacity:0;transform:translateY(24px);}  to{opacity:1;transform:translateY(0);} }
+    @keyframes spin         { to{transform:rotate(360deg);} }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="top-bar">
+    <a href="index.html" class="back-btn">← กลับ</a>
+    <img src="logo.png" alt="โลโก้" class="top-logo">
+    <div class="spacer"></div>
+  </div>
+  <h2>📷 สแกนเข้างาน-เลิกงาน</h2>
+
+  <div class="status-area">
+    <div id="main-status">⏳ กำลังเตรียมระบบ...</div>
+    <div id="gps-status"></div>
+  </div>
+  <div id="gps-alert-box" class="gps-alert">
+    ⚠️ คุณอยู่นอกพื้นที่ที่กำหนด!<br>กรุณาเข้าใกล้จุดเช็คอินแล้วรีเฟรชหน้าจอ
+  </div>
+
+  <!-- ===== ช่องเลือกสถานะ วางนอก modal แน่นอน ===== -->
+  <div class="status-box">
+      <label>เลือกสถานะการลงเวลา</label>
+      <div class="status-btns">
+      <button class="s-btn on-in" id="sIn"
+          onclick="selectStatus('in')">
+          🟢 มาทำงาน
+      </button>
+
+      <button class="s-btn" id="sOut"
+          onclick="selectStatus('out')">
+          🔴 เลิกงาน
+      </button>
+
+      <button class="s-btn" id="sWork"
+          onclick="selectStatus('work')">
+          🟡 ไปราชการ
+      </button>
+  </div>
+  </div>
+
+  <!-- VIDEO -->
+  <div class="video-container">
+    <div class="scanner-frame">
+      <div class="corner corner-tl"></div>
+      <div class="corner corner-tr"></div>
+      <div class="corner corner-bl"></div>
+      <div class="corner corner-br"></div>
+      <div class="scan-line" id="scanLine"></div>
+    </div>
+    <div id="overlay-status">รอโหลด...</div>
+    <video id="video" autoplay muted playsinline webkit-playsinline x5-playsinline disablepictureinpicture></video>
+  </div>
+
+  <button id="btnStart" onclick="startCamera()">📷 เปิดกล้องสแกนหน้า</button>
+</div>
+
+<!-- MODAL -->
+<div id="confirmModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-avatar">🙋</div>
+    <p class="modal-label">ตรวจพบบุคคล</p>
+    <div class="user-name" id="modalName">...</div>
+    <div class="pos-badge"  id="modalPosition">-</div>
+    <div class="time-badge" id="modalTime">--:--</div>
+    <div class="score-text" id="modalScore"></div>
+    <!-- แสดงสรุปสถานะที่เลือกไว้ก่อนหน้า -->
+    <div class="selected-status-display is-in" id="statusDisplay">🟢 ลงเวลามาทำงาน</div>
+    <button class="btn-confirm" id="btnConfirm" onclick="confirmAttendance()">✅ ยืนยันลงเวลา</button>
+    <button class="btn-cancel"  onclick="cancelAttendance()">ไม่ใช่ฉัน / ยกเลิก</button>
+  </div>
+</div>
+
+<script>
+  const API_URL       = localStorage.getItem('gasApiUrl') || (typeof GAS_API_URL !== 'undefined' ? GAS_API_URL : '');
+  const video         = document.getElementById('video');
+  const mainStatus    = document.getElementById('main-status');
+  const overlayStatus = document.getElementById('overlay-status');
+  const gpsStatus     = document.getElementById('gps-status');
+  const gpsAlertBox   = document.getElementById('gps-alert-box');
+  const btnStart      = document.getElementById('btnStart');
+
+  const isLineBrowser = /Line\//i.test(navigator.userAgent);
+
+  const MATCH_THRESHOLD = 0.45;
+  let knownFaces     = [];
+  let scanInterval   = null;
+  let currentMatch   = null;
+  let currentLat     = null;
+  let currentLng     = null;
+  // เก็บเป็น "รหัสสถานะ" (in/out/work) ไม่ใช่ข้อความไทย
+  // เดิมเก็บเป็นข้อความแล้วสะกดไม่ตรงกันระหว่างจุดเลือก (selectStatus) กับจุดเช็ค (openModal)
+  // เช่น 'ลงเวลาเข้าทำงาน' vs 'ลงเวลามาทำงาน', 'ลงเวลาเลิกทำงาน' vs 'ลงเวลาเลิกงาน'
+  // ทำให้เงื่อนไขไม่เข้าเคสไหนเลย ข้อความเลยค้างเป็นค่าเริ่มต้นที่ฝังไว้ใน HTML
+  let selectedStatus = 'in';
+
+  // จุดเดียวที่กำหนดข้อความ/ไอคอน/คลาส ของแต่ละสถานะ แก้ตรงนี้ที่เดียวพอ
+  const STATUS_MAP = {
+    in:   { text: 'ลงเวลาเข้าทำงาน', icon: '🟢', cls: 'is-in',   btnId: 'sIn',   btnCls: 'on-in'  },
+    out:  { text: 'ลงเวลาเลิกงาน',   icon: '🔴', cls: 'is-out',  btnId: 'sOut',  btnCls: 'on-out' },
+    work: { text: 'ลงเวลาไปราชการ',  icon: '🟡', cls: 'is-work', btnId: 'sWork', btnCls: 'on-work'}
+  };
+
+  /* ===== เลือกสถานะ (ปุ่มอยู่นอก modal) ===== */
+  function selectStatus(type) {
+    if (!STATUS_MAP[type]) return;
+
+    // รีเซ็ตปุ่มทั้งหมด
+    document.getElementById('sIn').className = 's-btn';
+    document.getElementById('sOut').className = 's-btn';
+    document.getElementById('sWork').className = 's-btn';
+
+    selectedStatus = type;
+    var s = STATUS_MAP[type];
+    document.getElementById(s.btnId).className = 's-btn ' + s.btnCls;
+  }
+
+  /* ===== Modal ===== */
+  function openModal() {
+    var sd = document.getElementById('statusDisplay');
+    var s = STATUS_MAP[selectedStatus];
+
+    sd.textContent = s.icon + ' ' + s.text;
+    sd.className = 'selected-status-display ' + s.cls;
+
+    document.getElementById('confirmModal').classList.add('show');
+  }
+  
+  function closeModal() {
+    document.getElementById('confirmModal').classList.remove('show');
+  }
+
+  /* ===== Init ===== */
+  if (!API_URL) {
+    showError('ยังไม่ได้ตั้งค่า API URL — <a href="config.html" style="color:#fbbf24">ไปตั้งค่า</a>');
+  } else {
+    if (isLineBrowser) {
+      mainStatus.innerHTML = '📱 เปิดจาก LINE — กดปุ่มด้านล่างเพื่อเริ่มสแกน';
+    }
+    window.addEventListener('load', init);
+  }
+
+  async function init() {
+    if (!window.isSecureContext) { showError('กล้องต้องเปิดผ่าน HTTPS เท่านั้น'); return; }
+    try {
+      mainStatus.innerText = '1/4 ตรวจสอบ GPS...';
+      await checkGPS();
+    } catch (e) { showError(e.message); }
+  }
+
+  async function checkGPS() {
+
+    if (!navigator.geolocation) {
+      throw new Error("Browser ไม่รองรับ GPS");
+    }
+
+    mainStatus.innerText = "📡 กำลังค้นหาสัญญาณ GPS...";
+
+    const configPromise = fetch(API_URL + "?action=getConfig").then(r => r.json());
+
+    const GOOD_ACCURACY = 15;
+    const MAX_WAIT_MS   = 8000;
+    const startTime = Date.now();
+
+    let bestPos      = null;
+    let bestAccuracy = Number.MAX_VALUE;
+    let watchId      = null;
+    let readCount    = 0;
+
+    await new Promise((resolve) => {
+      let settled = false;
+
+      function finish() {
+        if (settled) return;
+        settled = true;
+        if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+        resolve();
+      }
+
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          readCount++;
+          const acc = pos.coords.accuracy;
+
+          gpsStatus.innerHTML =
+            "📍 อ่านครั้งที่ " + readCount +
+            "<br>Accuracy : ±" + acc.toFixed(1) + " เมตร";
+
+          if (acc < bestAccuracy) {
+            bestAccuracy = acc;
+            bestPos      = pos;
+          }
+
+          if (bestAccuracy <= GOOD_ACCURACY) {
+            finish();
+          }
+        },
+        (err) => {
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: MAX_WAIT_MS,
+          maximumAge: 5000
+        }
+      );
+
+      setTimeout(finish, MAX_WAIT_MS);
+    });
+
+    const config = await configPromise;
+
+    if (!bestPos) {
+      throw new Error("ไม่สามารถอ่าน GPS ได้ กรุณาเปิด Location และลองใหม่");
+    }
+
+    currentLat = bestPos.coords.latitude;
+    currentLng = bestPos.coords.longitude;
+
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    gpsStatus.innerHTML +=
+      "<br><br>✅ ใช้ Accuracy : ±" + bestAccuracy.toFixed(1) +
+      " เมตร (" + elapsedSec + " วิ)";
+
+    if (!config.lat || !config.lng || config.radius == 0) {
+
+      gpsStatus.innerHTML += "<br>📍 ไม่จำกัดพื้นที่";
+      initFaceSystem();
+      return;
+
+    }
+
+    const dist = haversineKm(currentLat, currentLng, config.lat, config.lng);
+
+    if (dist <= config.radius) {
+
+      gpsStatus.innerHTML +=
+        "<br>✅ อยู่ในรัศมี " + (dist * 1000).toFixed(1) + " เมตร";
+
+      initFaceSystem();
+
+    } else {
+
+      gpsStatus.innerHTML +=
+        "<br>❌ อยู่นอกรัศมี " + (dist * 1000).toFixed(1) + " เมตร";
+
+      gpsAlertBox.style.display = "block";
+      mainStatus.innerText = "⛔ ไม่อนุญาตให้สแกน";
+      overlayStatus.innerText = "Out of Range";
+
+    }
+
+  }
+
+  async function initFaceSystem() {
+    mainStatus.innerText = '2/4 โหลด AI Model...';
+    const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+    try {
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+      ]);
+      loadFaceDatabase();
+    } catch (e) { showError('โหลด AI Model ล้มเหลว: ' + e.message); }
+  }
+
+  async function loadFaceDatabase() {
+    mainStatus.innerText = '3/4 โหลดฐานข้อมูลพนักงาน...';
+    try {
+      const data = await fetch(API_URL + '?action=getKnownFaces').then(r => r.json());
+      if (!data || data.length === 0) return showError('ไม่พบข้อมูลพนักงาน กรุณาลงทะเบียนก่อน');
+      knownFaces = data.map(u => ({
+        name: u.label, position: u.position || '',
+        descriptor: new Float32Array(u.descriptor)
+      }));
+      mainStatus.innerText   = '✅ ระบบพร้อมใช้งาน — เลือกสถานะแล้วกดเปิดกล้อง';
+      mainStatus.style.color = '#34d399';
+      btnStart.style.display = 'inline-block';
+    } catch (e) { showError('โหลดฐานข้อมูลล้มเหลว: ' + e.message); }
+  }
+
+  async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showError('Browser นี้ไม่รองรับกล้อง กรุณาเปิดด้วย Chrome หรือ Safari');
+      return;
+    }
+    btnStart.style.display = 'none';
+    mainStatus.innerText   = '📷 กำลังขออนุญาตใช้กล้อง...';
+    mainStatus.style.color = '#94a3b8';
+    try {
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+      } catch(e) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+      video.srcObject   = stream;
+      video.muted       = true;
+      video.playsInline = true;
+      await new Promise(resolve => { video.onloadedmetadata = resolve; });
+      await video.play();
+      video.classList.add('active');
+      mainStatus.innerText   = '✅ กำลังสแกน...';
+      mainStatus.style.color = '#34d399';
+      overlayStatus.innerText = 'มองกล้องเพื่อสแกน';
+      document.getElementById('scanLine').classList.add('active');
+      startScanLoop();
+    } catch(err) {
+      var msg = 'เปิดกล้องไม่ได้';
+      if (err.name === 'NotAllowedError') msg = 'กรุณาอนุญาตสิทธิ์กล้องใน LINE / Browser';
+      if (err.name === 'NotFoundError')   msg = 'ไม่พบกล้องในอุปกรณ์';
+      showError(msg);
+      btnStart.style.display = 'inline-block';
+    }
+  }
+
+  function startScanLoop() {
+    if (scanInterval) clearInterval(scanInterval);
+    overlayStatus.style.background = 'rgba(0,0,0,0.65)';
+    scanInterval = setInterval(async function() {
+      if (video.paused || video.ended || video.readyState < 2) return;
+      var det = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
+      if (det) {
+        var best = findBestMatch(det.descriptor);
+        if (best.distance < MATCH_THRESHOLD) {
+          clearInterval(scanInterval);
+          document.getElementById('scanLine').classList.remove('active');
+          showModal(best);
+        } else {
+          overlayStatus.innerText = 'ไม่รู้จัก (' + best.distance.toFixed(2) + ')';
+          overlayStatus.style.background = 'rgba(239,68,68,0.6)';
+        }
+      }
+    }, 600);
+  }
+
+  function findBestMatch(desc) {
+    var best = { name: 'unknown', position: '', distance: 1.0 };
+    knownFaces.forEach(function(u) {
+      var d = faceapi.euclideanDistance(desc, u.descriptor);
+      if (d < best.distance) best = { name: u.name, position: u.position, distance: d };
+    });
+    return best;
+  }
+
+  function showModal(match) {
+    currentMatch = match;
+    document.getElementById('modalName').innerText     = match.name;
+    document.getElementById('modalPosition').innerText = match.position || 'ไม่ระบุตำแหน่ง';
+    var now = new Date();
+    document.getElementById('modalTime').innerText  = '⏰ ' + now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+    document.getElementById('modalScore').innerText = 'ความเหมือน: ' + ((1 - match.distance) * 100).toFixed(1) + '%';
+    openModal();
+    mainStatus.innerText = 'กรุณายืนยัน...';
+  }
+
+  async function confirmAttendance() {
+    var btn = document.getElementById('btnConfirm');
+    btn.disabled    = true;
+    btn.innerHTML   = '<span class="spinner"></span>กำลังบันทึก...';
+    try {
+      // Content-Type เป็น text/plain จึงเป็น simple request
+      // ไม่ต้องผ่าน CORS preflight (ที่ GAS ไม่รองรับและจะทำให้ Failed to fetch)
+      var res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action:   'logAttendance',
+          name:     currentMatch.name,
+          position: currentMatch.position,
+          status:   STATUS_MAP[selectedStatus].text,
+          lat:      currentLat,
+          lng:      currentLng
+        })
+      });
+
+      // อ่านเป็น text ก่อน แล้วค่อย parse เผื่อ GAS ตอบกลับมาไม่ใช่ JSON
+      var text = await res.text();
+      var data;
+      try { data = JSON.parse(text); }
+      catch (e) { throw new Error('เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง'); }
+
+      if (data.success === false) throw new Error(data.error || 'เซิร์ฟเวอร์ไม่ยอมรับการบันทึก');
+
+      alert('✅ ' + (data.message || 'บันทึกเวลาสำเร็จ'));
+      window.location.href = 'index.html';
+    } catch(e) {
+      alert('❌ บันทึกล้มเหลว: ' + e.message);
+      btn.disabled  = false;
+      btn.innerHTML = '✅ ยืนยันลงเวลา';
+    }
+  }
+
+  function cancelAttendance() {
+    closeModal();
+    currentMatch = null;
+    if (scanInterval) clearInterval(scanInterval);
+    if (video.srcObject) { video.srcObject.getTracks().forEach(function(t){ t.stop(); }); video.srcObject = null; }
+    video.classList.remove('active');
+    document.getElementById('scanLine').classList.remove('active');
+    overlayStatus.innerText = 'รอโหลด...';
+    overlayStatus.style.background = 'rgba(0,0,0,0.65)';
+    mainStatus.innerText   = '✅ ระบบพร้อมใช้งาน';
+    mainStatus.style.color = '#34d399';
+    btnStart.style.display = 'inline-block';
+  }
+
+  function showError(msg) { mainStatus.innerHTML = '<span style="color:#f87171">❌ ' + msg + '</span>'; }
+  function haversineKm(la1,lo1,la2,lo2){var R=6371,dL=(la2-la1)*Math.PI/180,dO=(lo2-lo1)*Math.PI/180,a=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dO/2)*Math.sin(dO/2);return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+</script>
+</body>
+</html>

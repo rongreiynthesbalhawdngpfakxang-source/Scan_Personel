@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบบันทึกเวลาเข้างาน-ออกงาน</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script src="js/api-config.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Sarabun', sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0d1b2a 100%);
+      color: #e2e8f0;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 32px 16px 60px;
+      position: relative; overflow-x: hidden;
+    }
+    body::before, body::after {
+      content: ''; position: fixed; border-radius: 50%;
+      filter: blur(80px); opacity: 0.13; pointer-events: none; z-index: 0;
+    }
+    body::before { width: 400px; height: 400px; background: #6366f1; top: -100px; left: -100px; }
+    body::after  { width: 350px; height: 350px; background: #10b981; bottom: -80px; right: -80px; }
+
+
+    /* ===== HEADER ===== */
+    .header {
+      text-align: center; margin-bottom: 32px;
+      position: relative; z-index: 1;
+      animation: fadeInDown 0.6s ease;
+    }
+    .logo-icon { width: 90px; height: 90px; display: block; margin: 0 auto 10px; border-radius: 50%; filter: drop-shadow(0 0 16px rgba(99,102,241,0.55)); object-fit: cover; }
+    h1 {
+      font-size: 1.65em; font-weight: 700;
+      background: linear-gradient(135deg, #a5b4fc, #e2e8f0);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 4px;
+    }
+    .subtitle { font-size: 0.84em; color: #64748b; letter-spacing: 0.03em; }
+
+
+    /* ===== TAB NAV ===== */
+    .tab-nav {
+      display: flex; gap: 6px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px; padding: 5px;
+      width: 100%; max-width: 460px;
+      margin-bottom: 28px;
+      position: relative; z-index: 1;
+      animation: fadeInUp 0.5s ease;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px 6px;
+      border: none; border-radius: 10px;
+      background: transparent; color: #64748b;
+      font-family: 'Sarabun', sans-serif;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: all 0.25s ease;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .tab-btn.active {
+      background: rgba(99,102,241,0.25);
+      color: #a5b4fc;
+      box-shadow: 0 2px 10px rgba(99,102,241,0.2);
+    }
+    .tab-btn:hover:not(.active) { color: #94a3b8; background: rgba(255,255,255,0.05); }
+
+
+    /* ===== TAB PANELS ===== */
+    .tab-panel { display: none; width: 100%; max-width: 460px; position: relative; z-index: 1; }
+    .tab-panel.active { display: flex; flex-direction: column; gap: 14px; animation: fadeIn 0.35s ease; }
+
+
+    /* ===== MENU CARDS ===== */
+    .btn-menu {
+      display: flex; align-items: center; gap: 16px;
+      padding: 18px 20px; text-decoration: none;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.11);
+      backdrop-filter: blur(16px); color: #e2e8f0;
+      transition: all 0.3s ease;
+    }
+    .btn-menu:hover { transform: translateY(-3px); background: rgba(255,255,255,0.1); }
+    .btn-register:hover { box-shadow: 0 8px 28px rgba(99,102,241,0.35); border-color: rgba(99,102,241,0.45); }
+    .btn-scan:hover     { box-shadow: 0 8px 28px rgba(16,185,129,0.35); border-color: rgba(16,185,129,0.45); }
+    .btn-config:hover   { box-shadow: 0 8px 28px rgba(100,116,139,0.25); border-color: rgba(148,163,184,0.4); }
+    .card-icon {
+      width: 50px; height: 50px; border-radius: 13px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .btn-register .card-icon { background: linear-gradient(135deg,#6366f1,#4f46e5); box-shadow: 0 4px 14px rgba(99,102,241,0.4); }
+    .btn-scan     .card-icon { background: linear-gradient(135deg,#10b981,#059669); box-shadow: 0 4px 14px rgba(16,185,129,0.4); }
+    .btn-config   .card-icon { background: linear-gradient(135deg,#475569,#334155); box-shadow: 0 4px 14px rgba(71,85,105,0.4); }
+    .card-text { flex: 1; text-align: left; }
+    .card-title { font-size: 1em; font-weight: 600; color: #f1f5f9; margin-bottom: 2px; }
+    .card-desc  { font-size: 0.78em; color: #64748b; }
+    .card-arrow { font-size: 18px; color: #475569; transition: transform 0.3s ease, color 0.3s ease; }
+    .btn-menu:hover .card-arrow { transform: translateX(4px); color: #94a3b8; }
+
+
+    /* ===== API WARNING ===== */
+    .api-warning {
+      display: none;
+      background: rgba(245,158,11,0.14);
+      border: 1px solid rgba(245,158,11,0.38);
+      color: #fcd34d; border-radius: 12px;
+      padding: 11px 16px; font-size: 0.86em;
+    }
+    .api-warning a { color: #fbbf24; font-weight: 600; text-decoration: none; }
+
+
+    /* ===== DATA TABLE PANEL ===== */
+    .dt-toolbar {
+      display: flex; gap: 10px; align-items: center;
+      flex-wrap: wrap;
+    }
+    .dt-toolbar input {
+      flex: 1; min-width: 160px;
+      padding: 9px 14px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 10px; color: #e2e8f0;
+      font-size: 13px; font-family: 'Sarabun', sans-serif;
+      outline: none;
+    }
+    .dt-toolbar input:focus { border-color: rgba(99,102,241,0.5); }
+    .dt-toolbar input::placeholder { color: #475569; }
+
+
+    .btn-icon {
+      padding: 9px 16px; border: none; border-radius: 10px;
+      font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: all 0.25s ease;
+    }
+    .btn-refresh {
+      background: rgba(99,102,241,0.18);
+      border: 1px solid rgba(99,102,241,0.3);
+      color: #a5b4fc;
+    }
+    .btn-refresh:hover { background: rgba(99,102,241,0.28); }
+    .btn-clear-all {
+      background: rgba(239,68,68,0.13);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5;
+    }
+    .btn-clear-all:hover { background: rgba(239,68,68,0.25); }
+    .btn-clear-all:disabled { opacity: 0.45; cursor: not-allowed; }
+
+
+    /* stat bar */
+    .stat-bar {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 10px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 12px; padding: 12px 14px; text-align: center;
+    }
+    .stat-num  { font-size: 22px; font-weight: 700; color: #a5b4fc; }
+    .stat-label{ font-size: 11px; color: #64748b; margin-top: 2px; }
+
+
+    /* filter row */
+    .filter-row {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .filter-row select {
+      flex: 1; min-width: 120px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 10px; color: #e2e8f0;
+      font-size: 13px; font-family: 'Sarabun', sans-serif;
+      outline: none; appearance: none;
+    }
+    .filter-row select option { background: #1e1e3f; }
+
+
+    /* table wrapper */
+    .table-wrap {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 14px; overflow: hidden;
+    }
+    .tbl-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+    thead tr { background: rgba(99,102,241,0.18); }
+    thead th {
+      padding: 11px 12px; text-align: left;
+      color: #a5b4fc; font-weight: 600; font-size: 12px;
+      white-space: nowrap; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.04); }
+    tbody td { padding: 10px 12px; color: #cbd5e1; vertical-align: middle; }
+
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-in  { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
+    .badge-out { background: rgba(239,68,68,0.13);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
+
+
+    .btn-del {
+      padding: 5px 10px; border-radius: 8px; border: none;
+      background: rgba(239,68,68,0.13);
+      border: 1px solid rgba(239,68,68,0.25);
+      color: #fca5a5; font-size: 13px; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-del:hover { background: rgba(239,68,68,0.25); }
+
+
+    .tbl-footer {
+      padding: 10px 14px;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      font-size: 12px; color: #475569;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px;
+    }
+    .pagination { display: flex; gap: 4px; }
+    .page-btn {
+      width: 30px; height: 30px; border-radius: 7px; border: none;
+      background: rgba(255,255,255,0.07); color: #94a3b8;
+      font-size: 12px; cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .page-btn.active { background: rgba(99,102,241,0.3); color: #a5b4fc; }
+    .page-btn:hover:not(.active) { background: rgba(255,255,255,0.12); }
+
+
+    /* loading / empty */
+    .dt-loading {
+      padding: 32px; text-align: center; color: #475569; font-size: 14px;
+    }
+    .spinner-sm {
+      display: inline-block; width: 18px; height: 18px;
+      border: 2px solid rgba(99,102,241,0.25);
+      border-top-color: #6366f1;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      margin-right: 8px; vertical-align: middle;
+    }
+
+
+    /* map link */
+    .map-link { color: #34d399; text-decoration: none; font-size: 12px; }
+    .map-link:hover { text-decoration: underline; }
+
+
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeIn     { from { opacity:0; }                               to { opacity:1; } }
+    @keyframes fadeInDown { from { opacity:0; transform:translateY(-20px); }  to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeInUp   { from { opacity:0; transform:translateY(20px);  }  to { opacity:1; transform:translateY(0); } }
+    @keyframes spin       { to   { transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+
+<div class="header">
+  <img src="logo.png" alt="โลโก้โรงเรียน" class="logo-icon">
+  <h1>ระบบบันทึกเวลาเข้างาน-เลิกงาน</h1>
+  <p class="subtitle">Face Recognition &amp; GPS Attendance</p>
+</div>
+
+
+<!-- TAB NAV -->
+<div class="tab-nav">
+  <button class="tab-btn active" id="tab-menu" onclick="switchTab('menu')">🏠 เมนูหลัก</button>
+  <button class="tab-btn" id="tab-data" onclick="checkDataPassword()">🔒 ข้อมูลการลงเวลา</button>
+</div>
+
+
+<!-- ===== PANEL: MENU ===== -->
+<div class="tab-panel active" id="panel-menu">
+
+
+  <div id="apiWarning" class="api-warning">
+    ⚠️ ยังไม่ได้ตั้งค่า API — <a href="config.html">ไปตั้งค่าก่อน</a>
+  </div>
+
+
+  <a href="register.html" class="btn-menu btn-register" onclick="checkRegisterPassword(event)">
+    <div class="card-icon">👤</div>
+    <div class="card-text">
+      <div class="card-title">ลงทะเบียนเข้าใช้งาน</div>
+      <div class="card-desc">บันทึกข้อมูลใบหน้าและตำแหน่งใหม่</div>
+    </div>
+    <span class="card-arrow">›</span>
+  </a>
+
+
+  <a href="scan.html" class="btn-menu btn-scan">
+    <div class="card-icon">📷</div>
+    <div class="card-text">
+      <div class="card-title">สแกนเข้างาน-เลิกงาน</div>
+      <div class="card-desc">ยืนยันตัวตนด้วยใบหน้า + GPS</div>
+    </div>
+    <span class="card-arrow">›</span>
+  </a>
+
+
+  <a href="#" class="btn-menu btn-config" onclick="checkAdminPassword(event)">
+    <div class="card-icon">⚙️</div>
+    <div class="card-text">
+      <div class="card-title">ตั้งค่าระบบ</div>
+      <div class="card-desc">จัดการ GPS และ API (Admin)</div>
+    </div>
+    <span class="card-arrow">›</span>
+  </a>
+</div>
+
+
+<!-- ===== PANEL: DATA TABLE ===== -->
+<div class="tab-panel" id="panel-data">
+
+
+  <!-- Stat Bar -->
+  <div class="stat-bar">
+    <div class="stat-card"><div class="stat-num" id="statTotal">-</div><div class="stat-label">รายการทั้งหมด</div></div>
+    <div class="stat-card"><div class="stat-num" id="statIn"    style="color:#34d399">-</div><div class="stat-label">มาทำงาน</div></div>
+    <div class="stat-card"><div class="stat-num" id="statOut"   style="color:#fca5a5">-</div><div class="stat-label">เลิกงาน</div></div>
+  </div>
+
+
+  <!-- Toolbar -->
+  <div class="dt-toolbar">
+    <input type="text" id="searchInput" placeholder="🔍 ค้นหาชื่อ / ตำแหน่ง..." oninput="applyFilter()">
+    <button class="btn-icon btn-refresh" onclick="loadAttendance()">🔄 รีเฟรช</button>
+    <button class="btn-icon btn-clear-all" id="btnClearAll" onclick="clearAllAttendance()">🗑️ ลบทั้งหมด</button>
+  </div>
+
+
+  <!-- Filters -->
+  <div class="filter-row">
+    <select id="filterStatus" onchange="applyFilter()">
+      <option value="">สถานะทั้งหมด</option>
+      <option value="ลงเวลามาทำงาน">ลงเวลามาทำงาน</option>
+      <option value="ลงเวลาเลิกงาน">ลงเวลาเลิกงาน</option>
+    </select>
+    <select id="filterDate" onchange="applyFilter()">
+      <option value="">วันที่ทั้งหมด</option>
+    </select>
+  </div>
+
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="tbl-scroll">
+      <table id="attTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>ชื่อ-นามสกุล</th>
+            <th>ตำแหน่ง</th>
+            <th>สถานะ</th>
+            <th>เวลา</th>
+            <th>วันที่</th>
+            <th>แผนที่</th>
+            <th>ลบ</th>
+          </tr>
+        </thead>
+        <tbody id="attBody">
+          <tr><td colspan="8" class="dt-loading"><span class="spinner-sm"></span>กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tbl-footer">
+      <span id="rowInfo">-</span>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+
+</div><!-- end panel-data -->
+
+
+<script>
+  /* ============================================================
+     CONFIG
+  ============================================================ */
+  const API_URL = localStorage.getItem('gasApiUrl') || (typeof GAS_API_URL !== 'undefined' ? GAS_API_URL : '');
+
+
+  if (!API_URL) document.getElementById('apiWarning').style.display = 'block';
+
+
+  /* ============================================================
+     TABS
+  ============================================================ */
+  let dataUnlocked = false;  // เก็บสถานะว่าปลดล็อกแท็บข้อมูลแล้วหรือยัง
+
+
+  function switchTab(tab) {
+    document.getElementById('tab-menu').classList.toggle('active', tab === 'menu');
+    document.getElementById('tab-data').classList.toggle('active', tab === 'data');
+    // อัปเดต label ปุ่มข้อมูล
+    document.getElementById('tab-data').textContent =
+      dataUnlocked ? '📊 ข้อมูลการลงเวลา' : '🔒 ข้อมูลการลงเวลา';
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + tab).classList.add('active');
+    if (tab === 'data' && allRows.length === 0) loadAttendance();
+  }
+
+
+  /* ตรวจสอบรหัสผ่านก่อนเข้าแท็บข้อมูล */
+  function checkDataPassword() {
+    if (dataUnlocked) { switchTab('data'); return; }
+    const pw = prompt('🔒 กรุณากรอกรหัสผ่านเพื่อดูข้อมูลการลงเวลา');
+    if (pw === null) return;          // กด Cancel
+    if (pw === 'admin123') {
+      dataUnlocked = true;
+      switchTab('data');
+    } else {
+      alert('❌ รหัสผ่านไม่ถูกต้อง');
+    }
+  }
+
+
+  /* ============================================================
+     REGISTER (ลงทะเบียนเข้าใช้งาน)
+  ============================================================ */
+  function checkRegisterPassword(e) {
+    if (e) e.preventDefault();
+    const pw = prompt('🔒 กรุณากรอกรหัสผ่านเพื่อเข้าหน้าลงทะเบียน');
+    if (pw === null) return;
+    if (pw === 'admin123') {
+      sessionStorage.setItem('registerUnlocked', '1');
+      window.location.href = 'register.html';
+    } else {
+      alert('❌ รหัสผ่านไม่ถูกต้อง');
+    }
+  }
+
+
+  /* ============================================================
+     ADMIN (config page)
+  ============================================================ */
+  function checkAdminPassword(e) {
+    e.preventDefault();
+    const pw = prompt('กรุณากรอกรหัสผ่านผู้ดูแลระบบ');
+    if (pw === null) return;
+    pw === 'admin123' ? (window.location.href = 'config.html') : alert('❌ รหัสผ่านไม่ถูกต้อง');
+  }
+
+
+  /* ============================================================
+     DATA TABLE
+  ============================================================ */
+  let allRows     = [];   // ข้อมูลทั้งหมดจาก API
+  let filtered    = [];   // หลัง filter
+  let currentPage = 1;
+  const PAGE_SIZE = 15;
+
+
+  async function loadAttendance() {
+    if (!API_URL) {
+      setBody('<tr><td colspan="8" class="dt-loading" style="color:#f87171">❌ ยังไม่ได้ตั้งค่า API URL</td></tr>');
+      return;
+    }
+    setBody('<tr><td colspan="8" class="dt-loading"><span class="spinner-sm"></span>กำลังโหลด...</td></tr>');
+    try {
+      const res  = await fetch(API_URL + '?action=getAttendance');
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error(data.error || 'ข้อมูลไม่ถูกต้อง');
+      allRows = data;
+      buildDateFilter();
+      applyFilter();
+    } catch (err) {
+      setBody('<tr><td colspan="8" class="dt-loading" style="color:#f87171">❌ ' + err.message + '</td></tr>');
+    }
+  }
+
+
+  function buildDateFilter() {
+    const dates = [...new Set(allRows.map(r => r.date))].sort((a,b) => b.localeCompare(a));
+    const sel = document.getElementById('filterDate');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">วันที่ทั้งหมด</option>' +
+      dates.map(d => `<option value="${d}" ${d===cur?'selected':''}>${d}</option>`).join('');
+  }
+
+
+  function applyFilter() {
+    const q    = document.getElementById('searchInput').value.trim().toLowerCase();
+    const st   = document.getElementById('filterStatus').value;
+    const dt   = document.getElementById('filterDate').value;
+
+
+    filtered = allRows.filter(r => {
+      const matchQ  = !q  || r.name.toLowerCase().includes(q) || (r.position||'').toLowerCase().includes(q);
+      const matchSt = !st || r.status === st;
+      const matchDt = !dt || r.date   === dt;
+      return matchQ && matchSt && matchDt;
+    });
+
+
+    // stats (based on allRows for total accuracy)
+    document.getElementById('statTotal').textContent = allRows.length;
+    document.getElementById('statIn'   ).textContent = allRows.filter(r => r.status === 'ลงเวลามาทำงาน').length;
+    document.getElementById('statOut'  ).textContent = allRows.filter(r => r.status === 'ลงเวลาเลิกงาน').length;
+
+
+    currentPage = 1;
+    renderTable();
+  }
+
+
+  function renderTable() {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const page  = filtered.slice(start, start + PAGE_SIZE);
+    const total = filtered.length;
+
+
+    if (total === 0) {
+      setBody('<tr><td colspan="8" class="dt-loading">ไม่พบข้อมูล</td></tr>');
+      document.getElementById('rowInfo').textContent = 'ไม่พบข้อมูล';
+      document.getElementById('pagination').innerHTML = '';
+      return;
+    }
+
+
+    const html = page.map((r, i) => {
+      const isIn    = r.status === 'ลงเวลามาทำงาน';
+      const badge   = isIn
+        ? '<span class="badge badge-in">🟢 มาทำงาน</span>'
+        : '<span class="badge badge-out">🔴 เลิกงาน</span>';
+      const mapCell = r.mapLink && r.mapLink !== '-'
+        ? `<a href="${r.mapLink}" target="_blank" class="map-link">📍 ดูแผนที่</a>`
+        : '<span style="color:#334155">-</span>';
+
+
+      return `<tr>
+        <td style="color:#475569">${start + i + 1}</td>
+        <td><strong style="color:#e2e8f0">${r.name}</strong></td>
+        <td style="color:#94a3b8">${r.position || '-'}</td>
+        <td>${badge}</td>
+        <td style="font-variant-numeric:tabular-nums">${r.time}</td>
+        <td>${r.date}</td>
+        <td>${mapCell}</td>
+        <td><button class="btn-del" onclick="deleteRow(${r.rowIndex}, this)" title="ลบแถวนี้">🗑️</button></td>
+      </tr>`;
+    }).join('');
+
+
+    setBody(html);
+
+
+    // footer info
+    document.getElementById('rowInfo').textContent =
+      `แสดง ${start+1}–${Math.min(start+PAGE_SIZE, total)} จาก ${total} รายการ`;
+
+
+    // pagination
+    const pages = Math.ceil(total / PAGE_SIZE);
+    let pgHtml  = '';
+    for (let p = 1; p <= pages; p++) {
+      pgHtml += `<button class="page-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`;
+    }
+    document.getElementById('pagination').innerHTML = pgHtml;
+  }
+
+
+  function goPage(p) { currentPage = p; renderTable(); }
+
+
+  function setBody(html) {
+    document.getElementById('attBody').innerHTML = html;
+  }
+
+
+  /* ============================================================
+     DELETE ROW
+  ============================================================ */
+  async function deleteRow(rowIndex, btn) {
+    if (!confirm('⚠️ ต้องการลบข้อมูลแถวนี้?\nการลบไม่สามารถย้อนกลับได้')) return;
+
+
+    btn.disabled    = true;
+    btn.textContent = '⏳';
+
+
+    try {
+      const res  = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'deleteAttendanceRow', rowIndex: rowIndex })
+      });
+      const data = await res.json();
+
+
+      if (data.success) {
+        // ลบออกจาก allRows แล้ว re-index
+        allRows = allRows.filter(r => r.rowIndex !== rowIndex);
+        // re-index rowIndex ที่เหลือ (แถวใน sheet เลื่อนขึ้น)
+        allRows.forEach(r => { if (r.rowIndex > rowIndex) r.rowIndex--; });
+        buildDateFilter();
+        applyFilter();
+      } else {
+        alert('❌ ลบไม่สำเร็จ: ' + (data.error || 'ไม่ทราบสาเหตุ'));
+        btn.disabled    = false;
+        btn.textContent = '🗑️';
+      }
+    } catch (err) {
+      alert('❌ เกิดข้อผิดพลาด: ' + err.message);
+      btn.disabled    = false;
+      btn.textContent = '🗑️';
+    }
+  }
+
+
+  /* ============================================================
+     CLEAR ALL ATTENDANCE
+  ============================================================ */
+  async function clearAllAttendance() {
+    if (allRows.length === 0) {
+      alert('ℹ️ ไม่มีข้อมูลให้ลบ');
+      return;
+    }
+
+
+    // ยืนยัน 2 ชั้น
+    const step1 = confirm(
+      '⚠️ คำเตือน!\n\n' +
+      'ต้องการลบข้อมูลการลงเวลาทั้งหมด ' + allRows.length + ' รายการ?\n\n' +
+      '❌ การลบไม่สามารถย้อนกลับได้'
+    );
+    if (!step1) return;
+
+
+    const step2 = prompt(
+      '⛔ กรุณาพิมพ์ "ยืนยันลบ" เพื่อดำเนินการต่อ'
+    );
+    if (step2 !== 'ยืนยันลบ') {
+      if (step2 !== null) alert('❌ ยกเลิก: ข้อความไม่ตรง');
+      return;
+    }
+
+
+    const btn = document.getElementById('btnClearAll');
+    btn.disabled    = true;
+    btn.textContent = '⏳ กำลังลบ...';
+
+
+    try {
+      const res  = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'clearAllAttendance' })
+      });
+      const data = await res.json();
+
+
+      if (data.success) {
+        allRows  = [];
+        filtered = [];
+        document.getElementById('statTotal').textContent = 0;
+        document.getElementById('statIn'   ).textContent = 0;
+        document.getElementById('statOut'  ).textContent = 0;
+        document.getElementById('filterDate').innerHTML  = '<option value="">วันที่ทั้งหมด</option>';
+        setBody('<tr><td colspan="8" class="dt-loading">✅ ลบข้อมูลทั้งหมดเรียบร้อยแล้ว</td></tr>');
+        document.getElementById('rowInfo').textContent    = '-';
+        document.getElementById('pagination').innerHTML   = '';
+        alert('✅ ลบข้อมูลการลงเวลาทั้งหมดสำเร็จ');
+      } else {
+        alert('❌ ลบไม่สำเร็จ: ' + (data.error || 'ไม่ทราบสาเหตุ'));
+      }
+    } catch (err) {
+      alert('❌ เกิดข้อผิดพลาด: ' + err.message);
+    } finally {
+      btn.disabled    = false;
+      btn.innerHTML   = '🗑️ ลบทั้งหมด';
+    }
+  }
+</script>
+</body>
+</html>
